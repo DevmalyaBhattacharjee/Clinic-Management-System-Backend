@@ -16,7 +16,7 @@ import java.nio.charset.StandardCharsets;
  * OAuth2FailureHandler
  *
  * Handles Google OAuth2 failures:
- *   - User cancelled the Google consent screen
+ *   - User canceled the Google consent screen
  *   - Google returned an error
  *   - State parameter mismatch (CSRF)
  *

@@ -22,11 +22,12 @@ import java.util.List;
 /**
  * JwtAuthenticationFilter
  *
- * Validates JWT tokens on every incoming request EXCEPT the paths listed in
- * SKIP_PATHS.  The skip list is critical for OAuth2: if the filter runs on
- * /oauth2/authorization/google or /login/oauth2/code/google it will find no
- * Bearer token and block the flow before Spring Security's OAuth2 machinery
- * even starts, producing a spurious 401.
+ * Validates JWT tokens on every incoming request EXCEPT OPTIONS requests
+ * (CORS preflight) and the paths listed in SKIP_PATHS.  The skip list is
+ * critical for OAuth2: if the filter runs on /oauth2/authorization/google or
+ * /login/oauth2/code/google it will find no Bearer token and block the flow
+ * before Spring Security's OAuth2 machinery even starts, producing a
+ * spurious 401.
  *
  * shouldNotFilter() is called by the Servlet container BEFORE doFilterInternal,
  * so skipped paths bypass this filter completely.
@@ -65,6 +66,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
+        // CORS preflight requests never carry a JWT — let them pass through untouched
+        // so the CORS filter/headers are applied instead of a spurious 401/403.
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
         String path = request.getServletPath();
         return SKIP_PATHS.stream().anyMatch(p -> MATCHER.match(p, path));
     }

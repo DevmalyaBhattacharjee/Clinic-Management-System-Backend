@@ -8,6 +8,7 @@ import com.clinic.management.security.JwtAuthenticationFilter;
 import com.clinic.management.security.OAuth2FailureHandler;
 import com.clinic.management.security.OAuth2SuccessHandler;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -31,6 +32,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -71,6 +73,11 @@ public class SecurityConfig {
     private final OAuth2SuccessHandler       oAuth2SuccessHandler;
     private final OAuth2FailureHandler       oAuth2FailureHandler;
 
+    // Comma-separated list of allowed frontend origins.
+    // Override in production via the CORS_ALLOWED_ORIGINS env var on Railway.
+    @Value("${app.cors.allowed-origins:https://medicine-health.vercel.app,http://localhost:5173}")
+    private String allowedOrigins;
+
     // ── Beans ──────────────────────────────────────────────────────────────
 
     @Bean
@@ -95,12 +102,16 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration cfg = new CorsConfiguration();
-        // React dev server
-        cfg.setAllowedOrigins(List.of("http://localhost:3000"));
+        // Deployed Vercel frontend + local Vite dev server.
+        // Explicit origin list (not "*") is required because allowCredentials is true.
+        cfg.setAllowedOrigins(Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toList());
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
         cfg.setExposedHeaders(List.of("Authorization"));
-        cfg.setAllowCredentials(true);                    // needed for OAuth2 cookies
+        cfg.setAllowCredentials(true);                    // needed for OAuth2 cookies / JWT header
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", cfg);
@@ -131,6 +142,11 @@ public class SecurityConfig {
 
                 // ── URL authorization ──────────────────────────────────────────
                 .authorizeHttpRequests(auth -> auth
+
+                        // CORS preflight — browsers send OPTIONS with no Authorization header,
+                        // so it must be permitted for every path (including role-protected ones)
+                        // or the preflight itself gets a 401/403 before the real request is sent.
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         // Swagger / OpenAPI
                         .requestMatchers(
